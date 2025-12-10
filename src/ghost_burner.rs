@@ -102,9 +102,95 @@ fn main() {
        Commands::Swap {mint, amount_in_sol} => {
            let ghost = select_ghost_wallet();
            let mint = Pubkey::from_str(mint).expect("invalid mint");
-           let jupiter_quoate = reqwest::blocking::get()
+           let jupiter_quoate = reqwest::blocking::get(&format!("https://quoate-api.iup.ag/v6/quoate?inputMint=So111111111111111112\
+                &outputMint = {}\
+                 &amount={}\
+                 &slippageBps=50",
+           mint,
+           sol_to_lamports(*amount_in_sol))
+               .unwrap()
+               .json::()
+               .unwrap();
+
+           let route = &jupiter_quote["data"][0];
+           let swap_tx: String = reqwest::blocking::post("https://quote-api.iup.ag/v6/swap")
+               .json(&serde_json::json!({
+                   "route": route,
+                   "userPublicKey": ghost.pubkey.to_string(),
+                   "wrapAndUnwrapSol":true,
+               }))
+               .send()
+               .unwrap()
+               .json::()
+               .unwrap()["swapTransaction"]
+               .as_str()
+               .unwrap()
+               .to_string();
+
+           let mut swap_tx: Transaction = code::deserialize(&base64::decode(swap_tx).unwrap()).unwrap();
+           swap_tx.sign(&[&ghost.keypair],
+           client.get_latest_blockhash().unwrap());
+
+           let sig = client.send_and_cobfirm_transaction(&swap_tx).unwrap();
+           println!("Swap executed -> {} | tx: {}",mint,sig);
+
        }
+        Commands::Burn => {
+            let ghost = select_ghost_wallet();
+            let accounts = client.get_token_accounts_by_owner(&ghost.pubkey),
+            solana_client::rpc_filter::TokenAccountsFiler::Programid(spl_token::id()).unwrap();
+            for account in accounts {
+                let token_acc = Pubkey::from_str(&acc.account.data.parsed["info"]["mint"].as_str().unwrap()).unwrap();
+                let mint = Pubkey::from_str(&acc.account.data.parsed["info"]["mint"].as_str().unwrap()).unwrap();
+                let ix = token_instruction::burn(
+                    &spl_token::id(),
+                    &token_acc,
+                    &mint,
+                    &ghost.pubkey,
+                    &[],
+                    acc.account.data.parsed["info"]["tokenAmount"]["uiAmount"].as_f64().unwrap() as u64 * 1_000_000_000,)
+                .unwrap();
+
+                send_and_confirm(&client, &[ix], &ghost.keypair);
+            }
+            println!("All tokens burned for {}",ghost.pubkey);
+        }
+        Commands::Sweep => {
+            let ghost = select_ghost_wallet();
+            let main_pubkey = load_main_keypair().pubkey();
+            let balance = client.get_balance(&ghost.pubkey).unwrap();
+            if balance > 5000{
+                let ix = system_instruction::transfer(&ghost.pubkey, &main_pubkey, balance-5000);
+                send_and_confirm(&client, &[ix], &ghost.keypair);
+            }
+            fs::remove_file(format!("{}/{}.json", GHOST_DIR, "active")).ok();
+            println!("Ghost wallet swept and deleted: {}",ghost.pubkey);
+        }
+        Commands::List => {
+            if Path::new(GHOST_DIR).exists() {
+                for entry in fs::read_dir(GHOST_DIR).unwrap() {
+                    let name = entry.unwrap().file_name().into_string().unwrap();
+                    println!("->{}", name);
+                }
+            }
+        }
     }
+}
+fn select_ghost_wallet() -> GhostWallet {
+    let path = format!("{}/active.json",GHOST_DIR);
+    GhostWallet::load("active").expect("No active ghost wallet. Run 'ghost new' first.")
+}
+fn load_main_keypair() -> Keypair{
+    let bytes = fs::read("main.json").expect("Put your main wallet as main.json (base58 or raw)");
+    Keypair::from_bytes(&bytes).unwrap()
+}
+
+fn send_and_confirm(client: &RpcClient, ixs: &[instruction], signer: &Keypair){
+    let blockhash = client.get_latest_blockhash.unwrap();
+    let msg = Message::new(ixs, Some(&signer.pubkey()));
+    let mut tx = Transaction::new_unsigned(msg);
+    tx.sign(&[signer], blockhash);
+    client.send_and_confirm_transaction(&tx).unwrap();
 }
 
 
