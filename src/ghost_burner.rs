@@ -99,7 +99,11 @@ fn main() {
             let sig = client.send_and_confirm_transaction(&tx).unwrap();
             println!("Funded {} SOL -> {} | tx: {}",amount_sol,ghost.pubkey,sig);
         }
-       Commands::Swap {}
+       Commands::Swap {mint, amount_in_sol} => {
+           let ghost = select_ghost_wallet();
+           let mint = Pubkey::from_str(mint).expect("invalid mint");
+           let jupiter_quoate = reqwest::blocking::get()
+       }
     }
 }
 
