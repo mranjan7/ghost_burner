@@ -19,15 +19,16 @@ use std::str::FromStr;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use serde_json::Value;
 use spl_token::instruction as token_instruction;
 use spl_associated_token_account::get_associated_token_address;
+use serde::Deserialize;
 
 const RPC_URL: &str = "https://api.devnet.solana.com";
 const GHOST_DIR: &str = "ghost_wallets";
 
 #[derive(Parser)]
 #[command(name = "ghost", about = "ghost")]
-
 struct Cli{
    #[command(subcommand)]
    command: Commands,
@@ -77,6 +78,17 @@ impl GhostWallet {
         }
     }
 
+
+}
+#[derive(Debug, Deserialize)]
+struct JupiterQuoteResponse{
+    data: Vec<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct JupiterSwapResponse{
+    #[serde(rename = "swapTransaction")]
+    swap_transaction: String,
 
 }
 
