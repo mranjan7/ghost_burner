@@ -2,6 +2,7 @@ use std::fmt::format;
 use clap::{Parser, Subcommand};
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_request::TokenAccountsFilter;
+use solana_account_decoder::UiAccountData;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     native_token::sol_str_to_lamports,
@@ -143,18 +144,18 @@ fn main() {
                 let token_account_pubkey = rcp_keyed_account.pubkey;
                 let account = rcp_keyed_account.account;
                 let token_acc = Pubkey::from_str(&token_account_pubkey).unwrap();
-                let parsed = match account.data{
-                    UIAccountData::Json => account.data,
-                    _ => None,
+                let parsed = match &account.data{
+                    UiAccountData::Json(parsed) => parsed,
+                    _ => continue,
                 };
-                let mint = Pubkey::from_str(&account.data.parsed["info"]["mint"].as_str().unwrap()).unwrap();
+                let mint = Pubkey::from_str(&parsed.parsed["info"]["mint"].as_str().unwrap()).unwrap();
                 let ix = token_instruction::burn(
                     &spl_token::id(),
                     &token_acc,
                     &mint,
                     &ghost.pubkey,
                     &[],
-                    acc.account.data.parsed["info"]["tokenAmount"]["uiAmount"].as_f64().unwrap() as u64 * 1_000_000_000,)
+                    parsed.parsed["info"]["tokenAmount"]["amount"].as_str().unwrap().parse::<u64>().unwrap())
                 .unwrap();
 
                 send_and_confirm(&client, &[ix], &ghost.keypair);
