@@ -36,8 +36,9 @@ struct Cli{
 #[derive(Subcommand)]
 enum Commands {
     New,
-    Fund( f64),
-    Swap( String, f64),
+    Fund{ amount_sol: f64},
+    Swap{ mint:String,
+          amount_in_sol: f64},
     Burn,
     Sweep,
     List,
@@ -87,12 +88,12 @@ fn main() {
             let name = format!("ghost_{}", chrono::Utc::now().timestamp());
             ghost.save(&name);
         }
-        Commands::Fund( amount_sol) => {
+        Commands::Fund{ amount_sol} => {
             let ghost = select_ghost_wallet();
             let main_kp = load_main_keypair();
-            let lamports = sol_to_lamports("amount_sol");
+            let lamports = sol_str_to_lamports("amount_sol");
 
-            let ix = system_instruction::transfer(&main_kp.pubkey(), &ghost.pubkey, lamports);
+            let ix = system_instruction::transfer(&main_kp.pubkey(), &ghost.pubkey, lamports.unwrap());
             let recent_blockhash = client.get_latest_blockhash().unwrap();
             let msg = Message::new(&[ix], Some(&main_kp.pubkey()));
             let mut tx = Transaction::new_unsigned(msg);
@@ -100,7 +101,7 @@ fn main() {
             let sig = client.send_and_confirm_transaction(&tx).unwrap();
             println!("Funded {} SOL -> {} | tx: {}",amount_sol,ghost.pubkey,sig);
         }
-       Commands::Swap (mint, amount_in_sol) => {
+       Commands::Swap {mint, amount_in_sol} => {
            let ghost = select_ghost_wallet();
            let mint = Pubkey::from_str(mint).expect("invalid mint");
            let jupiter_quote = reqwest::blocking::get(&format!("https://quoate-api.iup.ag/v6/quoate?inputMint=So111111111111111112\
@@ -108,9 +109,9 @@ fn main() {
                  &amount={}\
                  &slippageBps=50",
            mint,
-           sol_to_lamports(*amount_in_sol)))
+           sol_str_to_lamports(&format!("{}",*amount_in_sol)).unwrap()))
                .unwrap()
-               .json::()
+               .json()
                .unwrap();
 
            let route = &jupiter_quote["data"][0];
