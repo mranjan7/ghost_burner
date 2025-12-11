@@ -144,9 +144,9 @@ fn main() {
                 let account = rcp_keyed_account.account;
                 let token_acc = Pubkey::from_str(&token_account_pubkey).unwrap();
                 let parsed = match account.data{
-                    Json(v) -> v,parsed
-                    _ => None
-                }
+                    UIAccountData::Json => account.data,
+                    _ => None,
+                };
                 let mint = Pubkey::from_str(&account.data.parsed["info"]["mint"].as_str().unwrap()).unwrap();
                 let ix = token_instruction::burn(
                     &spl_token::id(),
