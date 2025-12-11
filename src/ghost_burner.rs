@@ -68,8 +68,9 @@ impl GhostWallet {
         if Path::new(&path).exists() {
             let bytes = fs::read(path).unwrap();
             let keypair = keypair_from_seed(&bytes).unwrap();
+            let pubkey = keypair.pubkey();
             Some(Self{
-                keypair,pubkey:keypair.pubkey()
+                keypair,pubkey,
             })
         } else {
             None
@@ -104,7 +105,7 @@ fn main() {
        Commands::Swap {mint, amount_in_sol} => {
            let ghost = select_ghost_wallet();
            let mint = Pubkey::from_str(mint).expect("invalid mint");
-           let jupiter_quote = reqwest::blocking::get(&format!("https://quoate-api.iup.ag/v6/quoate?inputMint=So111111111111111112\
+           let jupiter_quote:JupiterQuoteResponse = reqwest::blocking::get(&format!("https://quoate-api.iup.ag/v6/quoate?inputMint=So111111111111111112\
                 &outputMint = {}\
                  &amount={}\
                  &slippageBps=50",
