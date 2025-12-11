@@ -1,12 +1,11 @@
 use std::fmt::format;
 use clap::{Parser, Subcommand};
 use solana_client::rpc_client::RpcClient;
+use solana_client::rpc_request::TokenAccountsFilter;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
-    native_token::{
-        so_to_lamports,
-        LAMPORTS_PER_SOL,
-    },
+    native_token::sol_str_to_lamports,
+    native_token::LAMPORTS_PER_SOL,
     pubkey::Pubkey,
     signature::{ Signer, Keypair, },
     signer::keypair::keypair_from_seed,
@@ -36,15 +35,15 @@ struct Cli{
 #[derive(Subcommand)]
 enum Commands {
     New,
-    Fund(amount_sol: f64),
-    Swap(mint: String, amount_in_sol: f64),
+    Fund( f64),
+    Swap( String, f64),
     Burn,
     Sweep,
     List,
 }
 
 struct GhostWallet {
-    keypair: KeyPair,
+    keypair: Keypair,
     pubkey: Pubkey,
 }
 
@@ -62,9 +61,10 @@ impl GhostWallet {
         println!("Ghost wallet create : {} -> {}",name,self.pubkey);
     }
 
-    fn load(name: &str) -> Option{
+    fn load(name: &str) -> Option<Self>{
         let path = format!("{}/{}.json", GHOST_DIR, name);
         if Path::new(&path).exists() {
+            let bytes = fs::read(path).unwrap();
             let keypair = keypair_from_seed(&bytes).unwrap();
             Some(Self{
                 keypair,pubkey:keypair.pubkey()
@@ -86,34 +86,34 @@ fn main() {
             let name = format!("ghost_{}", chrono::Utc::now().timestamp());
             ghost.save(&name);
         }
-        Commands::Fund{ amount_sol} => {
+        Commands::Fund( amount_sol) => {
             let ghost = select_ghost_wallet();
             let main_kp = load_main_keypair();
             let lamports = sol_to_lamports("amount_sol");
 
             let ix = system_instruction::transfer(&main_kp.pubkey(), &ghost.pubkey, lamports);
-            let recent_blockhash = client.get_latest_blockhash(0.unwrap();
+            let recent_blockhash = client.get_latest_blockhash().unwrap();
             let msg = Message::new(&[ix], Some(&main_kp.pubkey()));
             let mut tx = Transaction::new_unsigned(msg);
             tx.sign(&[&main_kp], recent_blockhash);
             let sig = client.send_and_confirm_transaction(&tx).unwrap();
             println!("Funded {} SOL -> {} | tx: {}",amount_sol,ghost.pubkey,sig);
         }
-       Commands::Swap {mint, amount_in_sol} => {
+       Commands::Swap (mint, amount_in_sol) => {
            let ghost = select_ghost_wallet();
            let mint = Pubkey::from_str(mint).expect("invalid mint");
-           let jupiter_quoate = reqwest::blocking::get(&format!("https://quoate-api.iup.ag/v6/quoate?inputMint=So111111111111111112\
+           let jupiter_quote = reqwest::blocking::get(&format!("https://quoate-api.iup.ag/v6/quoate?inputMint=So111111111111111112\
                 &outputMint = {}\
                  &amount={}\
                  &slippageBps=50",
            mint,
-           sol_to_lamports(*amount_in_sol))
+           sol_to_lamports(*amount_in_sol)))
                .unwrap()
                .json::()
                .unwrap();
 
            let route = &jupiter_quote["data"][0];
-           let swap_tx: String = reqwest::blocking::post("https://quote-api.iup.ag/v6/swap")
+           let swap_tx: String = reqwest::blocking::Client::new().post("https://quote-api.iup.ag/v6/swap")
                .json(&serde_json::json!({
                    "route": route,
                    "userPublicKey": ghost.pubkey.to_string(),
@@ -121,27 +121,33 @@ fn main() {
                }))
                .send()
                .unwrap()
-               .json::()
+               .json()
                .unwrap()["swapTransaction"]
                .as_str()
                .unwrap()
                .to_string();
 
-           let mut swap_tx: Transaction = code::deserialize(&base64::decode(swap_tx).unwrap()).unwrap();
+           let mut swap_tx: Transaction = bincode::deserialize(&base64::decode(swap_tx).unwrap()).unwrap();
            swap_tx.sign(&[&ghost.keypair],
            client.get_latest_blockhash().unwrap());
 
-           let sig = client.send_and_cobfirm_transaction(&swap_tx).unwrap();
+           let sig = client.send_and_confirm_transaction(&swap_tx).unwrap();
            println!("Swap executed -> {} | tx: {}",mint,sig);
 
        }
         Commands::Burn => {
             let ghost = select_ghost_wallet();
-            let accounts = client.get_token_accounts_by_owner(&ghost.pubkey),
-            solana_client::rpc_filter::TokenAccountsFiler::Programid(spl_token::id()).unwrap();
-            for account in accounts {
-                let token_acc = Pubkey::from_str(&acc.account.data.parsed["info"]["mint"].as_str().unwrap()).unwrap();
-                let mint = Pubkey::from_str(&acc.account.data.parsed["info"]["mint"].as_str().unwrap()).unwrap();
+            let accounts = client.get_token_accounts_by_owner(&ghost.pubkey,
+            TokenAccountsFilter::ProgramId(spl_token::id())).unwrap();
+            for rcp_keyed_account in accounts {
+                let token_account_pubkey = rcp_keyed_account.pubkey;
+                let account = rcp_keyed_account.account;
+                let token_acc = Pubkey::from_str(&token_account_pubkey).unwrap();
+                let parsed = match account.data{
+                    Json(v) -> v,parsed
+                    _ => None
+                }
+                let mint = Pubkey::from_str(&account.data.parsed["info"]["mint"].as_str().unwrap()).unwrap();
                 let ix = token_instruction::burn(
                     &spl_token::id(),
                     &token_acc,
@@ -185,8 +191,8 @@ fn load_main_keypair() -> Keypair{
     Keypair::from_bytes(&bytes).unwrap()
 }
 
-fn send_and_confirm(client: &RpcClient, ixs: &[instruction], signer: &Keypair){
-    let blockhash = client.get_latest_blockhash.unwrap();
+fn send_and_confirm(client: &RpcClient, ixs: &[Instruction], signer: &Keypair){
+    let blockhash = client.get_latest_blockhash().unwrap();
     let msg = Message::new(ixs, Some(&signer.pubkey()));
     let mut tx = Transaction::new_unsigned(msg);
     tx.sign(&[signer], blockhash);
