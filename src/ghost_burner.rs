@@ -126,8 +126,12 @@ fn main() {
                .unwrap()
                .json()
                .unwrap();
-
-           let route = &jupiter_quote["data"][0];
+           let url = format!("https://quote-api.jup.ag/v6/quote?...{}",mint);
+            let jupiter_quote: JupiterQuoteResponse =reqwest::blocking::get(&url)
+                .unwrap()
+                .json()
+                .unwrap();
+           let route = &jupiter_quote.data[0];
            let swap_tx: String = reqwest::blocking::Client::new().post("https://quote-api.iup.ag/v6/swap")
                .json(&serde_json::json!({
                    "route": route,
