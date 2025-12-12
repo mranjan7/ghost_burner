@@ -109,7 +109,9 @@ fn main() {
         }
         Commands::Fund{name, amount_sol} => {
 
-            let ghost = GhostWallet::load(name).expect(&format!("Wallet {} not found . run 'ghost new {}' first. to check current active wallets run ghost list",name,name));
+
+            let final_name = format!("ghost_{}", name);
+            let ghost = GhostWallet::load(&final_name).expect(&format!("Wallet {} not found . run 'ghost new {}' first. to check current active wallets run ghost list",name,name));
             let main_kp = load_main_keypair();
             let lamports =(amount_sol*1e9).round() as u64;
 
