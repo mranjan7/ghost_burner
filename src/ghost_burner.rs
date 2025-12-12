@@ -215,7 +215,7 @@ fn select_ghost_wallet() -> GhostWallet {
     GhostWallet::load("active").expect("No active ghost wallet. Run 'ghost new' first.")
 }
 fn load_main_keypair() -> Keypair{
-    let bytes = fs::read("main.json").expect("Put your main wallet as main.json (base58 or raw)");
+    let bytes = fs::read("~/.config/solana/id.json").expect("Put your main wallet as main.json (base58 or raw)");
     Keypair::from_bytes(&bytes).unwrap()
 }
 
