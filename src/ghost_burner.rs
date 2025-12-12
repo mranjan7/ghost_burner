@@ -36,8 +36,8 @@ struct Cli{
 
 #[derive(Subcommand)]
 enum Commands {
-    New,
-    Fund{ amount_sol: f64},
+    New{ name: String },
+    Fund{ name:String,amount_sol: f64},
     Swap{ mint:String,
           amount_in_sol: f64},
     Burn,
@@ -94,19 +94,26 @@ struct JupiterSwapResponse{
 
 fn main() {
     let cli = Cli::parse();
-    let client = RpcClient::new_with_commitment(RPC_URL.into(), CommitmentConfig::confirmed());
+    let client = RpcClient::new_with_commitment::<String>(RPC_URL.into(), CommitmentConfig::confirmed());
     match &cli.command {
-        Commands::New => {
+        Commands::New{name} => {
             let ghost = GhostWallet::new();
-            let name = format!("ghost_{}", chrono::Utc::now().timestamp());
-            ghost.save(&name);
+            let final_name = format!("ghost_{}", name);
+            let path = format!("{}/{}.json",GHOST_DIR,final_name);
+            if Path::new(&path).exists(){
+                eprintln!("Wallet {} already exists ! Pick a new name or delete teh old one (run : ghost delete {})",name,name);
+                std::process::exit(1);
+            }
+            ghost.save(&final_name);
+            println!("Created -> {} | {}",name,ghost.pubkey);
         }
-        Commands::Fund{ amount_sol} => {
-            let ghost = select_ghost_wallet();
-            let main_kp = load_main_keypair();
-            let lamports = sol_str_to_lamports("amount_sol");
+        Commands::Fund{name, amount_sol} => {
 
-            let ix = system_instruction::transfer(&main_kp.pubkey(), &ghost.pubkey, lamports.unwrap());
+            let ghost = GhostWallet::load(name).expect(&format!("Wallet {} not found . run 'ghost new {}' first. to check current active wallets run ghost list",name,name));
+            let main_kp = load_main_keypair();
+            let lamports =(amount_sol*1e9).round() as u64;
+
+            let ix = system_instruction::transfer(&main_kp.pubkey(), &ghost.pubkey, lamports);
             let recent_blockhash = client.get_latest_blockhash().unwrap();
             let msg = Message::new(&[ix], Some(&main_kp.pubkey()));
             let mut tx = Transaction::new_unsigned(msg);
@@ -140,7 +147,7 @@ fn main() {
                }))
                .send()
                .unwrap()
-               .json()
+               .json::<Value>()
                .unwrap()["swapTransaction"]
                .as_str()
                .unwrap()
