@@ -1,0 +1,23 @@
+name: Build Rust Binary
+
+on:
+	push:
+		branches: [main]
+	jobs:
+		build:
+			runs-on: ubuntu-latest
+		steps:
+		- uses: actions/checkout@v4
+
+		- name: install rust
+		  uses: dtolnay/rust-toolchain@stable
+		  with:
+		  	toolchain: stable
+			target: i686-unknown-linux-musl 
+
+		- name: Build
+		  run: cargo build --release --target i686-unknown-linux-musl
+	
+		name: Upload Artifact
+		path: target/i686-unknown-linux-musl/release/ghost
+
